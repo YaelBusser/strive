@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, StatusBar } from 'react-native';
 import { Colors } from '../../constants/Colors';
-import { getActivities } from '../../services/DatabaseService';
+import { getActivities, getGlobalStats } from '../../services/DatabaseService';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,15 +14,26 @@ type Activity = {
     avg_speed: number;
 };
 
+type GlobalStats = {
+    totalActivities: number;
+    totalDistance: number;
+    totalDuration: number;
+    avgSpeed: number;
+};
+
 export default function ActivityScreen() {
     const [activities, setActivities] = useState<Activity[]>([]);
+    const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
     const [refreshing, setRefreshing] = useState(false);
-    const router = useRouter(); // Initialize router
+    const router = useRouter();
 
     const loadActivities = async () => {
         try {
             const data = await getActivities();
             setActivities(data as Activity[]);
+
+            const stats = await getGlobalStats();
+            setGlobalStats(stats);
         } catch (e) {
             console.error(e);
         }
@@ -98,6 +109,35 @@ export default function ActivityScreen() {
                 <Text style={styles.headerSubtitle}>Prêt à bouger ?</Text>
             </View>
 
+            {/* Global Stats */}
+            {globalStats && globalStats.totalActivities > 0 && (
+                <View style={styles.statsContainer}>
+                    <LinearGradient
+                        colors={Colors.gradientPrimary}
+                        style={styles.statsCard}
+                    >
+                        <View style={styles.statsGrid}>
+                            <View style={styles.globalStatItem}>
+                                <Text style={styles.globalStatValue}>{globalStats.totalActivities}</Text>
+                                <Text style={styles.globalStatLabel}>Activités</Text>
+                            </View>
+                            <View style={styles.globalStatItem}>
+                                <Text style={styles.globalStatValue}>{globalStats.totalDistance.toFixed(1)}</Text>
+                                <Text style={styles.globalStatLabel}>km totaux</Text>
+                            </View>
+                            <View style={styles.globalStatItem}>
+                                <Text style={styles.globalStatValue}>{formatDuration(globalStats.totalDuration)}</Text>
+                                <Text style={styles.globalStatLabel}>Temps total</Text>
+                            </View>
+                            <View style={styles.globalStatItem}>
+                                <Text style={styles.globalStatValue}>{globalStats.avgSpeed.toFixed(1)}</Text>
+                                <Text style={styles.globalStatLabel}>km/h moy.</Text>
+                            </View>
+                        </View>
+                    </LinearGradient>
+                </View>
+            )}
+
             {activities.length === 0 ? (
                 <View style={styles.emptyState}>
                     <View style={styles.emptyIconBg}>
@@ -139,6 +179,40 @@ const styles = StyleSheet.create({
         fontSize: 32,
         fontWeight: '800',
         color: Colors.text,
+    },
+    statsContainer: {
+        paddingHorizontal: 20,
+        marginBottom: 20,
+    },
+    statsCard: {
+        borderRadius: 20,
+        padding: 20,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.3,
+        shadowRadius: 12,
+        elevation: 8,
+    },
+    statsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 16,
+    },
+    globalStatItem: {
+        flex: 1,
+        minWidth: '40%',
+        alignItems: 'center',
+    },
+    globalStatValue: {
+        fontSize: 28,
+        fontWeight: '800',
+        color: '#fff',
+        marginBottom: 4,
+    },
+    globalStatLabel: {
+        fontSize: 12,
+        color: 'rgba(255,255,255,0.8)',
+        textAlign: 'center',
     },
     list: {
         paddingHorizontal: 20,

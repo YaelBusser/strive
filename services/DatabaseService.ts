@@ -82,3 +82,23 @@ export const deleteActivity = async (id: number) => {
     await database.runAsync('DELETE FROM location_points WHERE activity_id = ?', id);
     await database.runAsync('DELETE FROM activities WHERE id = ?', id);
 };
+
+export const getGlobalStats = async () => {
+    const database = await getDb();
+    const result = await database.getFirstAsync(`
+        SELECT 
+            COUNT(*) as totalActivities,
+            COALESCE(SUM(distance), 0) as totalDistance,
+            COALESCE(SUM(duration), 0) as totalDuration,
+            COALESCE(AVG(avg_speed), 0) as avgSpeed
+        FROM activities 
+        WHERE end_time IS NOT NULL
+    `) as any;
+
+    return {
+        totalActivities: result?.totalActivities || 0,
+        totalDistance: result?.totalDistance || 0,
+        totalDuration: result?.totalDuration || 0,
+        avgSpeed: result?.avgSpeed || 0,
+    };
+};

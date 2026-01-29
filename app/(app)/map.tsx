@@ -11,7 +11,9 @@ export default function MapScreen() {
     const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
     const [routeCoordinates, setRouteCoordinates] = useState<{ latitude: number; longitude: number }[]>([]);
     const [isTracking, setIsTracking] = useState(false);
+    const [isPaused, setIsPaused] = useState(false);
     const [distance, setDistance] = useState(0);
+    const [elapsedTime, setElapsedTime] = useState(0);
     const mapRef = useRef<MapView>(null);
 
     useEffect(() => {
@@ -79,11 +81,27 @@ export default function MapScreen() {
         }
     }, [currentLocation, isTracking]);
 
+    // Timer for elapsed time
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isTracking) {
+            interval = setInterval(() => {
+                setElapsedTime(LocationService.getElapsedTime());
+                setIsPaused(LocationService.isPaused());
+            }, 100); // Update every 100ms for smooth display
+        }
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [isTracking]);
+
     const toggleTracking = async () => {
         if (isTracking) {
             try {
                 await LocationService.stopTracking();
                 setIsTracking(false);
+                setIsPaused(false);
+                setElapsedTime(0);
             } catch (e) {
                 console.error(e);
             }
@@ -93,10 +111,33 @@ export default function MapScreen() {
                 await LocationService.startTracking();
                 setIsTracking(true);
                 setDistance(0);
+                setElapsedTime(0);
             } catch (e) {
                 alert('Permission requise ou erreur de démarrage');
             }
         }
+    };
+
+    const togglePause = () => {
+        if (isPaused) {
+            LocationService.resumeTracking();
+            setIsPaused(false);
+        } else {
+            LocationService.pauseTracking();
+            setIsPaused(true);
+        }
+    };
+
+    const formatTime = (ms: number) => {
+        const totalSeconds = Math.floor(ms / 1000);
+        const hours = Math.floor(totalSeconds / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        if (hours > 0) {
+            return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
     };
 
     return (
@@ -130,22 +171,53 @@ export default function MapScreen() {
                     colors={[Colors.surface, '#111']}
                     style={styles.controls}
                 >
-                    <View style={styles.statsContainer}>
-                        <Text style={styles.statLabel}>DISTANCE</Text>
-                        <Text style={styles.statValue}>{distance.toFixed(2)} <Text style={styles.unit}>km</Text></Text>
+                    <View style={styles.statsRow}>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statLabel}>TEMPS</Text>
+                            <Text style={styles.statValue}>{formatTime(elapsedTime)}</Text>
+                        </View>
+                        <View style={styles.statBox}>
+                            <Text style={styles.statLabel}>DISTANCE</Text>
+                            <Text style={styles.statValue}>{distance.toFixed(2)} <Text style={styles.unit}>km</Text></Text>
+                        </View>
                     </View>
 
-                    <View style={[styles.statusIndicator, { backgroundColor: isTracking ? Colors.success : Colors.border }]}>
-                        <Text style={styles.statusText}>{isTracking ? "EN COURS" : "PRÊT"}</Text>
+                    <View style={[styles.statusIndicator, {
+                        backgroundColor: !isTracking ? Colors.border : isPaused ? Colors.warning : Colors.success
+                    }]}>
+                        <Text style={styles.statusText}>
+                            {!isTracking ? "PRÊT" : isPaused ? "EN PAUSE" : "EN COURS"}
+                        </Text>
                     </View>
 
-                    <TouchableOpacity
-                        style={[styles.button, isTracking ? styles.stopButton : styles.startButton]}
-                        onPress={toggleTracking}
-                        activeOpacity={0.8}
-                    >
-                        <Ionicons name={isTracking ? "stop" : "play"} size={32} color="#fff" />
-                    </TouchableOpacity>
+                    <View style={styles.buttonsRow}>
+                        {!isTracking ? (
+                            <TouchableOpacity
+                                style={[styles.button, styles.startButton]}
+                                onPress={toggleTracking}
+                                activeOpacity={0.8}
+                            >
+                                <Ionicons name="play" size={32} color="#fff" />
+                            </TouchableOpacity>
+                        ) : (
+                            <>
+                                <TouchableOpacity
+                                    style={[styles.button, styles.pauseButton]}
+                                    onPress={togglePause}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name={isPaused ? "play" : "pause"} size={28} color="#fff" />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.button, styles.stopButton]}
+                                    onPress={toggleTracking}
+                                    activeOpacity={0.8}
+                                >
+                                    <Ionicons name="stop" size={28} color="#fff" />
+                                </TouchableOpacity>
+                            </>
+                        )}
+                    </View>
                 </LinearGradient>
             </View>
         </View>
@@ -169,9 +241,6 @@ const styles = StyleSheet.create({
     controls: {
         padding: 24,
         borderRadius: 24,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         shadowColor: "#000",
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.5,
@@ -180,24 +249,33 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#333',
     },
+    statsRow: {
+        flexDirection: 'row',
+        gap: 16,
+        marginBottom: 16,
+        width: '100%',
+    },
+    statBox: {
+        flex: 1,
+    },
     statsContainer: {
         flex: 1,
     },
     statLabel: {
         color: Colors.textSecondary,
-        fontSize: 12,
+        fontSize: 11,
         fontWeight: 'bold',
         marginBottom: 4,
         letterSpacing: 1,
     },
     statValue: {
         color: '#fff',
-        fontSize: 32,
-        fontWeight: '800', // Extra bold
+        fontSize: 24,
+        fontWeight: '800',
         fontVariant: ['tabular-nums'],
     },
     unit: {
-        fontSize: 16,
+        fontSize: 14,
         color: Colors.textSecondary,
         fontWeight: '600',
     },
@@ -214,10 +292,15 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: 'bold',
     },
+    buttonsRow: {
+        flexDirection: 'row',
+        gap: 12,
+        justifyContent: 'center',
+    },
     button: {
-        width: 64,
-        height: 64,
-        borderRadius: 32,
+        width: 56,
+        height: 56,
+        borderRadius: 28,
         justifyContent: 'center',
         alignItems: 'center',
         shadowColor: Colors.primary,
@@ -229,7 +312,10 @@ const styles = StyleSheet.create({
     startButton: {
         backgroundColor: Colors.primary,
     },
+    pauseButton: {
+        backgroundColor: Colors.warning,
+    },
     stopButton: {
-        backgroundColor: Colors.error, // Red for stop
+        backgroundColor: Colors.error,
     },
 });
