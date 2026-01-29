@@ -11,9 +11,12 @@ export const locationEvents = new EventEmitter<{ newLocations: (locations: Locat
 
 // State
 let isTracking = false;
+let isPaused = false;
 let currentActivityId: number | null = null;
 let currentDistance = 0;
 let startTime = 0;
+let pauseStartTime = 0;
+let totalPausedTime = 0;
 let routePoints: { latitude: number, longitude: number }[] = [];
 
 // Define the task
@@ -76,6 +79,9 @@ export const LocationService = {
             currentDistance = 0;
             startTime = Date.now();
             routePoints = [];
+            isPaused = false;
+            totalPausedTime = 0;
+            pauseStartTime = 0;
 
             // Start background updates
             await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
@@ -106,17 +112,43 @@ export const LocationService = {
             await Location.stopLocationUpdatesAsync(LOCATION_TASK_NAME);
 
             // Finish Activity in DB
-            const duration = (Date.now() - startTime) / 1000; // seconds
+            const duration = (Date.now() - startTime - totalPausedTime) / 1000; // seconds
             await finishActivity(currentActivityId, currentDistance, duration, routePoints);
 
             isTracking = false;
+            isPaused = false;
             currentActivityId = null;
+            totalPausedTime = 0;
             console.log('Tracking stopped');
         } catch (e) {
             console.error('Stop tracking failed', e);
         }
     },
 
+    pauseTracking: () => {
+        if (!isTracking || isPaused) return;
+        isPaused = true;
+        pauseStartTime = Date.now();
+        console.log('Tracking paused');
+    },
+
+    resumeTracking: () => {
+        if (!isTracking || !isPaused) return;
+        isPaused = false;
+        totalPausedTime += Date.now() - pauseStartTime;
+        console.log('Tracking resumed');
+    },
+
     isTracking: () => isTracking,
+    isPaused: () => isPaused,
     getCurrentDistance: () => currentDistance,
+    getElapsedTime: () => {
+        if (!isTracking) return 0;
+        const now = Date.now();
+        const elapsed = now - startTime - totalPausedTime;
+        if (isPaused) {
+            return elapsed - (now - pauseStartTime);
+        }
+        return elapsed;
+    },
 };
