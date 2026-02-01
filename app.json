@@ -27,7 +27,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#121212"
       },
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
@@ -56,6 +56,12 @@
         }
       ],
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6de0c383-7ece-4190-a8c2-6dc24195c001"
+      }
+    }
   }
 }

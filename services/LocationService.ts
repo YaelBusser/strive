@@ -1,10 +1,39 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { EventEmitter } from 'expo-modules-core';
+import * as Notifications from 'expo-notifications';
 import { createActivity, addLocationPoint, finishActivity } from './DatabaseService';
 import { getDistanceFromLatLonInKm } from '../utils/geometry';
 
 const LOCATION_TASK_NAME = 'background-location-task';
+const NOTIFICATION_CHANNEL = 'strive-activity-channel';
+const NOTIFICATION_ID = 'strive-ongoing-activity';
+
+// Notification Actions
+Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+        shouldShowAlert: false,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: false, // Added for type compliance
+        shouldShowList: false, // Added for type compliance
+    }),
+});
+
+// Configure actions
+Notifications.setNotificationCategoryAsync('TRACKING_ACTIONS', [
+    { identifier: 'pause', buttonTitle: 'Pause', options: { opensAppToForeground: false } },
+    { identifier: 'resume', buttonTitle: 'Reprendre', options: { opensAppToForeground: false } }, // Will not show 'Resume' initially
+    { identifier: 'stop', buttonTitle: 'Stop', options: { opensAppToForeground: true } }, // Stop opens app to confirm/finish
+]);
+
+// Initialize channel (Android)
+Notifications.setNotificationChannelAsync(NOTIFICATION_CHANNEL, {
+    name: 'Suivi d\'activité',
+    importance: Notifications.AndroidImportance.LOW, // Low importance to avoid sound/popup on update
+    vibrationPattern: [0, 250, 250, 250],
+    lightColor: '#FD9500',
+});
 
 // Event emitter to send updates to the UI
 export const locationEvents = new EventEmitter<{ newLocations: (locations: Location.LocationObject[]) => void }>();
@@ -46,6 +75,8 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
                     }
                 }
 
+
+
                 if (shouldRecord) {
                     try {
                         await addLocationPoint(currentActivityId, latitude, longitude, speed, accuracy);
@@ -57,6 +88,10 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
                             currentDistance += dist;
                         }
                         routePoints.push({ latitude, longitude });
+
+                        // Update Notification
+                        await LocationService.updateNotification();
+
                     } catch (dbError) {
                         console.error('DB Insert Error', dbError);
                     }
@@ -64,7 +99,24 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
             }
         }
     }
+
 });
+
+// Calculate duration helper
+const getDuration = () => {
+    if (!startTime) return 0;
+    const now = Date.now();
+    const elapsed = now - startTime - totalPausedTime;
+    return isPaused ? elapsed - (now - pauseStartTime) : elapsed;
+};
+
+// Format time
+const formatDuration = (ms: number) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${m}m ${s}s`;
+};
 
 export const LocationService = {
     requestPermissions: async () => {
@@ -150,6 +202,35 @@ export const LocationService = {
         isPaused = false;
         totalPausedTime += Date.now() - pauseStartTime;
         console.log('Tracking resumed');
+        LocationService.updateNotification();
+    },
+
+    updateNotification: async () => {
+        if (!isTracking) return;
+
+        const duration = getDuration();
+        const dist = currentDistance.toFixed(2);
+
+        // Dynamic actions: Show "Resume" if paused, "Pause" otherwise
+        await Notifications.setNotificationCategoryAsync('TRACKING_ACTIONS', [
+            isPaused
+                ? { identifier: 'resume', buttonTitle: 'Reprendre', options: { opensAppToForeground: false } }
+                : { identifier: 'pause', buttonTitle: 'Pause', options: { opensAppToForeground: false } },
+            { identifier: 'stop', buttonTitle: 'Terminer', options: { opensAppToForeground: true } },
+        ]);
+
+        await Notifications.scheduleNotificationAsync({
+            content: {
+                title: isPaused ? 'Strive (En Pause)' : 'Strive (En cours...)',
+                body: `${dist} km • ${formatDuration(duration)}`,
+                data: { secret: 'strive' },
+                categoryIdentifier: 'TRACKING_ACTIONS',
+                sticky: true, // Keep it persistent
+                autoDismiss: false,
+            },
+            trigger: null, // Immediate
+            identifier: NOTIFICATION_ID
+        });
     },
 
     isTracking: () => isTracking,
@@ -165,3 +246,19 @@ export const LocationService = {
         return elapsed;
     },
 };
+
+// Handle Notification Actions (Background)
+Notifications.addNotificationResponseReceivedListener(response => {
+    const actionId = response.actionIdentifier;
+
+    if (actionId === 'pause') {
+        LocationService.pauseTracking();
+        LocationService.updateNotification();
+    } else if (actionId === 'resume') {
+        LocationService.resumeTracking();
+    } else if (actionId === 'stop') {
+        // App opens automatically due to opensAppToForeground: true
+        // UI should handle checking state and stopping
+        // Or we can stop here if we want background stop (but safer to let user confirm in UI)
+    }
+});

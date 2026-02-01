@@ -1,16 +1,16 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Link, useFocusEffect } from 'expo-router';
 import { getGlobalStats } from '../../services/DatabaseService';
-import { useCallback, useState } from 'react';
 
 export default function ProfileScreen() {
-    const { user, signOut } = useAuth();
-    const [stats, setStats] = useState({ totalActivities: 0, totalDistance: 0 });
+    const { user, signOut, updateProfilePhoto } = useAuth();
+    const [stats, setStats] = useState({ totalActivities: 0, totalDistance: 0, totalDuration: 0, avgSpeed: 0 });
 
     useFocusEffect(
         useCallback(() => {
@@ -20,10 +20,26 @@ export default function ProfileScreen() {
 
     const loadStats = async () => {
         const data = await getGlobalStats();
-        setStats({
-            totalActivities: data.totalActivities,
-            totalDistance: data.totalDistance
+        setStats(data);
+    };
+
+    const handlePickImage = async () => {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission requise', 'Nous avons besoin de la permission pour accéder à vos photos.');
+            return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
         });
+
+        if (!result.canceled) {
+            await user?.id && updateProfilePhoto(result.assets[0].uri);
+        }
     };
 
     return (
@@ -33,7 +49,7 @@ export default function ProfileScreen() {
                     colors={[Colors.surface, Colors.background]}
                     style={styles.header}
                 >
-                    <View style={styles.avatarContainer}>
+                    <TouchableOpacity style={styles.avatarContainer} onPress={handlePickImage} activeOpacity={0.8}>
                         {user?.profilePhoto ? (
                             <Image
                                 source={{ uri: user.profilePhoto }}
@@ -47,7 +63,10 @@ export default function ProfileScreen() {
                                 <Text style={styles.avatarText}>{user?.name?.[0]?.toUpperCase() || 'U'}</Text>
                             </LinearGradient>
                         )}
-                    </View>
+                        <View style={styles.editBadge}>
+                            <Ionicons name="camera" size={16} color={Colors.text} />
+                        </View>
+                    </TouchableOpacity>
                     <Text style={styles.name}>{user?.name || 'Utilisateur'}</Text>
                     <Text style={styles.email}>{user?.email || 'email@exemple.com'}</Text>
 
@@ -60,6 +79,11 @@ export default function ProfileScreen() {
                         <View style={styles.stat}>
                             <Text style={styles.statVal}>{stats.totalDistance.toFixed(1)}</Text>
                             <Text style={styles.statLabel}>km</Text>
+                        </View>
+                        <View style={styles.divider} />
+                        <View style={styles.stat}>
+                            <Text style={styles.statVal}>{(stats.totalDuration / 3600).toFixed(1)}</Text>
+                            <Text style={styles.statLabel}>heures</Text>
                         </View>
                     </View>
                 </LinearGradient>
