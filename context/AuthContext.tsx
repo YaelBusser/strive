@@ -15,6 +15,7 @@ type AuthContextType = {
     signIn: (email: string, name: string) => Promise<void>;
     signOut: () => Promise<void>;
     updateProfilePhoto: (uri: string) => Promise<void>;
+    updateProfile: (name: string) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType>({
@@ -23,6 +24,7 @@ const AuthContext = createContext<AuthContextType>({
     signIn: async () => { },
     signOut: async () => { },
     updateProfilePhoto: async () => { },
+    updateProfile: async () => { },
 });
 
 export function useAuth() {
@@ -84,8 +86,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const updateProfile = async (name: string) => {
+        if (user) {
+            const updatedUser = { ...user, name };
+            setUser(updatedUser);
+            await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, isLoading, signIn, signOut, updateProfilePhoto }}>
+        <AuthContext.Provider value={{ user, isLoading, signIn, signOut, updateProfilePhoto, updateProfile }}>
             {children}
         </AuthContext.Provider>
     );

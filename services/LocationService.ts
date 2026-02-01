@@ -34,20 +34,32 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         // Persist to DB
         if (currentActivityId) {
             for (const loc of locations) {
-                const { latitude, longitude, speed } = loc.coords;
-                try {
-                    await addLocationPoint(currentActivityId, latitude, longitude, speed);
+                const { latitude, longitude, speed, accuracy } = loc.coords;
 
-                    // Update distance calculation (simplistic background accumulation)
-                    if (routePoints.length > 0) {
-                        const lastPoint = routePoints[routePoints.length - 1];
-                        const dist = getDistanceFromLatLonInKm(lastPoint.latitude, lastPoint.longitude, latitude, longitude);
-                        // dist is in km
-                        currentDistance += dist;
+                // Filter: Minimum distance 5m (approx) to avoid noise, unless it's the first point
+                let shouldRecord = true;
+                if (routePoints.length > 0) {
+                    const lastPoint = routePoints[routePoints.length - 1];
+                    const distKm = getDistanceFromLatLonInKm(lastPoint.latitude, lastPoint.longitude, latitude, longitude);
+                    if (distKm * 1000 < 5) { // Less than 5 meters
+                        shouldRecord = false;
                     }
-                    routePoints.push({ latitude, longitude });
-                } catch (dbError) {
-                    console.error('DB Insert Error', dbError);
+                }
+
+                if (shouldRecord) {
+                    try {
+                        await addLocationPoint(currentActivityId, latitude, longitude, speed, accuracy);
+
+                        // Update distance calculation
+                        if (routePoints.length > 0) {
+                            const lastPoint = routePoints[routePoints.length - 1];
+                            const dist = getDistanceFromLatLonInKm(lastPoint.latitude, lastPoint.longitude, latitude, longitude);
+                            currentDistance += dist;
+                        }
+                        routePoints.push({ latitude, longitude });
+                    } catch (dbError) {
+                        console.error('DB Insert Error', dbError);
+                    }
                 }
             }
         }
@@ -64,7 +76,7 @@ export const LocationService = {
         return backgroundStatus === 'granted';
     },
 
-    startTracking: async () => {
+    startTracking: async (activityType: string = 'run') => {
         if (isTracking) return;
 
         const hasPermissions = await LocationService.requestPermissions();
@@ -74,7 +86,7 @@ export const LocationService = {
 
         try {
             // Initialize Activity in DB
-            const resultId = await createActivity();
+            const resultId = await createActivity(activityType);
             currentActivityId = Number(resultId);
             currentDistance = 0;
             startTime = Date.now();
@@ -86,8 +98,9 @@ export const LocationService = {
             // Start background updates
             await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
                 accuracy: Location.Accuracy.BestForNavigation,
-                timeInterval: 1000,
-                distanceInterval: 5,
+                activityType: Location.ActivityType.Fitness,
+                timeInterval: 2000, // 2 seconds (Target: 1-3s)
+                distanceInterval: 5, // 5 meters (Target: 5-10m)
                 foregroundService: {
                     notificationTitle: "Strive is tracking your run",
                     notificationBody: "Recording your activity...",

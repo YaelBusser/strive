@@ -14,7 +14,15 @@ export default function MapScreen() {
     const [isPaused, setIsPaused] = useState(false);
     const [distance, setDistance] = useState(0);
     const [elapsedTime, setElapsedTime] = useState(0);
+    const [selectedType, setSelectedType] = useState('run');
     const mapRef = useRef<MapView>(null);
+
+    const ACTIVITY_TYPES = [
+        { id: 'run', label: 'Course', icon: 'walk' }, // Ionicons doesn't have a perfect 'run' for outline, walk/body is ok
+        { id: 'walk', label: 'Marche', icon: 'footsteps' },
+        { id: 'bike', label: 'Vélo', icon: 'bicycle' },
+        { id: 'hike', label: 'Rando', icon: 'compass' },
+    ];
 
     useEffect(() => {
         // Initial current location & auto-center
@@ -108,7 +116,7 @@ export default function MapScreen() {
         } else {
             try {
                 setRouteCoordinates([]);
-                await LocationService.startTracking();
+                await LocationService.startTracking(selectedType);
                 setIsTracking(true);
                 setDistance(0);
                 setElapsedTime(0);
@@ -189,6 +197,36 @@ export default function MapScreen() {
                             {!isTracking ? "PRÊT" : isPaused ? "EN PAUSE" : "EN COURS"}
                         </Text>
                     </View>
+
+                    <View style={[styles.statusIndicator, {
+                        backgroundColor: !isTracking ? Colors.border : isPaused ? Colors.warning : Colors.success
+                    }]}>
+                        <Text style={styles.statusText}>
+                            {!isTracking ? "PRÊT" : isPaused ? "EN PAUSE" : "EN COURS"}
+                        </Text>
+                    </View>
+
+                    {/* Type Selector (Only visible when not tracking) */}
+                    {!isTracking && (
+                        <View style={styles.typeSelector}>
+                            {ACTIVITY_TYPES.map(type => (
+                                <TouchableOpacity
+                                    key={type.id}
+                                    style={[styles.typeButton, selectedType === type.id && styles.typeButtonSelected]}
+                                    onPress={() => setSelectedType(type.id)}
+                                >
+                                    <Ionicons
+                                        name={type.icon as any}
+                                        size={20}
+                                        color={selectedType === type.id ? '#fff' : Colors.textSecondary}
+                                    />
+                                    <Text style={[styles.typeLabel, selectedType === type.id && styles.typeLabelSelected]}>
+                                        {type.label}
+                                    </Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
 
                     <View style={styles.buttonsRow}>
                         {!isTracking ? (
@@ -317,5 +355,32 @@ const styles = StyleSheet.create({
     },
     stopButton: {
         backgroundColor: Colors.error,
+    },
+    typeSelector: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginBottom: 24,
+        backgroundColor: 'rgba(255,255,255,0.05)',
+        borderRadius: 16,
+        padding: 4,
+    },
+    typeButton: {
+        flex: 1,
+        alignItems: 'center',
+        paddingVertical: 8,
+        borderRadius: 12,
+        gap: 4,
+    },
+    typeButtonSelected: {
+        backgroundColor: Colors.primary,
+    },
+    typeLabel: {
+        fontSize: 10,
+        color: Colors.textSecondary,
+        fontWeight: '500',
+    },
+    typeLabelSelected: {
+        color: '#fff',
+        fontWeight: 'bold',
     },
 });

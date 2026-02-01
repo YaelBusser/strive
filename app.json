@@ -15,6 +15,12 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ],
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Strive utilise votre position pour suivre vos activités en arrière-plan.",
+        "NSLocationWhenInUseUsageDescription": "Strive utilise votre position pour tracer votre parcours.",
         "NSPhotoLibraryUsageDescription": "Strive a besoin d'accéder à vos photos pour définir votre photo de profil."
       }
     },
@@ -24,16 +30,13 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "READ_MEDIA_IMAGES",
-        "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,

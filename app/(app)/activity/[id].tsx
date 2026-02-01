@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ActivityIndicator, Alert } from 'react-native';
 import { Tabs, useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../../constants/Colors';
 import { deleteActivity, getActivityById } from '../../../services/DatabaseService';
-import MapView, { Polyline, PROVIDER_DEFAULT } from 'react-native-maps';
+import MapView, { Polyline, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -14,10 +14,21 @@ export default function ActivityDetailScreen() {
     const [loading, setLoading] = useState(true);
     const [statsVisible, setStatsVisible] = useState(false);
     const insets = useSafeAreaInsets();
+    const mapRef = useRef<MapView>(null);
+    const polyline = activity?.polyline_json ? JSON.parse(activity.polyline_json) : [];
 
     useEffect(() => {
         loadActivity();
     }, [id]);
+
+    useEffect(() => {
+        if (polyline.length > 0 && mapRef.current) {
+            mapRef.current.fitToCoordinates(polyline, {
+                edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
+                animated: true,
+            });
+        }
+    }, [polyline]);
 
     const loadActivity = async () => {
         if (!id) return;
@@ -60,6 +71,16 @@ export default function ActivityDetailScreen() {
         return `${h > 0 ? h + 'h ' : ''}${m}m ${s}s`;
     };
 
+    const getActivityLabel = (type?: string) => {
+        switch (type) {
+            case 'walk': return 'Marche';
+            case 'bike': return 'Sortie Vélo';
+            case 'hike': return 'Randonnée';
+            case 'run':
+            default: return 'Course à pied';
+        }
+    };
+
     if (loading) {
         return (
             <View style={styles.loadingContainer}>
@@ -76,7 +97,7 @@ export default function ActivityDetailScreen() {
         );
     }
 
-    const polyline = activity.polyline_json ? JSON.parse(activity.polyline_json) : [];
+
     const date = new Date(activity.start_time);
 
     let region = {
@@ -119,12 +140,35 @@ export default function ActivityDetailScreen() {
                 zoomEnabled={true}
                 showsUserLocation={false}
                 userInterfaceStyle="dark"
+                ref={mapRef}
+                onMapReady={() => {
+                    if (polyline.length > 0) {
+                        mapRef.current?.fitToCoordinates(polyline, {
+                            edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
+                            animated: true,
+                        });
+                    }
+                }}
             >
                 <Polyline
                     coordinates={polyline}
                     strokeColor={Colors.primary}
                     strokeWidth={4}
                 />
+                {polyline.length > 0 && (
+                    <>
+                        <Marker
+                            coordinate={polyline[0]}
+                            title="Départ"
+                            pinColor="green"
+                        />
+                        <Marker
+                            coordinate={polyline[polyline.length - 1]}
+                            title="Arrivée"
+                            pinColor="red"
+                        />
+                    </>
+                )}
             </MapView>
 
             <TouchableOpacity
@@ -171,7 +215,7 @@ export default function ActivityDetailScreen() {
                                 {date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                             </Text>
 
-                            <Text style={styles.modalTitle}>Course à pied</Text>
+                            <Text style={styles.modalTitle}>{getActivityLabel(activity.type)}</Text>
 
                             <View style={styles.statsGrid}>
                                 <View style={styles.statBox}>

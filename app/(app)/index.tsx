@@ -5,6 +5,8 @@ import { getActivities, getGlobalStats } from '../../services/DatabaseService';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Location from 'expo-location';
+import { Linking } from 'react-native';
 
 type Activity = {
     id: number;
@@ -12,6 +14,7 @@ type Activity = {
     distance: number;
     duration: number;
     avg_speed: number;
+    type?: string;
 };
 
 type GlobalStats = {
@@ -25,6 +28,7 @@ export default function ActivityScreen() {
     const [activities, setActivities] = useState<Activity[]>([]);
     const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [permissionStatus, setPermissionStatus] = useState<Location.PermissionStatus | null>(null);
     const router = useRouter();
 
     const loadActivities = async () => {
@@ -42,8 +46,19 @@ export default function ActivityScreen() {
     useFocusEffect(
         useCallback(() => {
             loadActivities();
+            checkPermissions();
         }, [])
     );
+
+    const checkPermissions = async () => {
+        const { status } = await Location.getForegroundPermissionsAsync();
+        setPermissionStatus(status);
+    };
+
+    const requestPermissions = async () => {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        setPermissionStatus(status);
+    };
 
     const onRefresh = async () => {
         setRefreshing(true);
@@ -51,47 +66,61 @@ export default function ActivityScreen() {
         setRefreshing(false);
     };
 
-    const renderItem = ({ item }: { item: Activity }) => (
-        <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push(`/(app)/activity/${item.id}`)}
-        >
-            <LinearGradient
-                colors={[Colors.surface, '#252525']}
-                style={styles.card}
-            >
-                <View style={styles.cardHeader}>
-                    <View style={styles.iconContainer}>
-                        <Ionicons name="fitness" size={20} color="#fff" />
-                    </View>
-                    <View>
-                        <Text style={styles.title}>Course à pied</Text>
-                        <Text style={styles.date}>
-                            {new Date(item.start_time).toLocaleDateString()}
-                        </Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} style={{ marginLeft: 'auto' }} />
-                </View>
+    const getActivityConfig = (type?: string) => {
+        switch (type) {
+            case 'walk': return { label: 'Marche', icon: 'footsteps' };
+            case 'bike': return { label: 'Vélo', icon: 'bicycle' };
+            case 'hike': return { label: 'Randonnée', icon: 'compass' };
+            case 'run':
+            default: return { label: 'Course à pied', icon: 'walk' }; // Default icon
+        }
+    };
 
-                <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Distance</Text>
-                        <Text style={styles.statValue}>{item.distance.toFixed(2)} km</Text>
+    const renderItem = ({ item }: { item: Activity }) => {
+        const config = getActivityConfig(item.type);
+
+        return (
+            <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => router.push(`/(app)/activity/${item.id}`)}
+            >
+                <LinearGradient
+                    colors={[Colors.surface, '#252525']}
+                    style={styles.card}
+                >
+                    <View style={styles.cardHeader}>
+                        <View style={styles.iconContainer}>
+                            <Ionicons name={config.icon as any} size={20} color="#fff" />
+                        </View>
+                        <View>
+                            <Text style={styles.title}>{config.label}</Text>
+                            <Text style={styles.date}>
+                                {new Date(item.start_time).toLocaleDateString()}
+                            </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} style={{ marginLeft: 'auto' }} />
                     </View>
-                    <View style={styles.statSeparator} />
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Durée</Text>
-                        <Text style={styles.statValue}>{formatDuration(item.duration)}</Text>
+
+                    <View style={styles.statsRow}>
+                        <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Distance</Text>
+                            <Text style={styles.statValue}>{item.distance.toFixed(2)} km</Text>
+                        </View>
+                        <View style={styles.statSeparator} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Durée</Text>
+                            <Text style={styles.statValue}>{formatDuration(item.duration)}</Text>
+                        </View>
+                        <View style={styles.statSeparator} />
+                        <View style={styles.statItem}>
+                            <Text style={styles.statLabel}>Vitesse</Text>
+                            <Text style={styles.statValue}>{item.avg_speed.toFixed(1)} km/h</Text>
+                        </View>
                     </View>
-                    <View style={styles.statSeparator} />
-                    <View style={styles.statItem}>
-                        <Text style={styles.statLabel}>Vitesse</Text>
-                        <Text style={styles.statValue}>{item.avg_speed.toFixed(1)} km/h</Text>
-                    </View>
-                </View>
-            </LinearGradient>
-        </TouchableOpacity>
-    );
+                </LinearGradient>
+            </TouchableOpacity>
+        );
+    };
 
     const formatDuration = (seconds: number) => {
         const hrs = Math.floor(seconds / 3600);
@@ -108,6 +137,34 @@ export default function ActivityScreen() {
                 <Text style={styles.headerTitle}>Bonjour</Text>
                 <Text style={styles.headerSubtitle}>Prêt à bouger ?</Text>
             </View>
+
+            {permissionStatus !== 'granted' && (
+                <View style={[styles.permissionBanner, permissionStatus === 'denied' && styles.permissionBannerError]}>
+                    <Ionicons
+                        name={permissionStatus === 'denied' ? "alert-circle" : "location"}
+                        size={24}
+                        color={permissionStatus === 'denied' ? Colors.error : "#FD9500"}
+                    />
+                    <View style={styles.permissionTextContainer}>
+                        <Text style={[styles.permissionTitle, permissionStatus === 'denied' && { color: Colors.error }]}>
+                            {permissionStatus === 'denied' ? "Localisation refusée" : "Autorisation requise"}
+                        </Text>
+                        <Text style={styles.permissionText}>
+                            {permissionStatus === 'denied'
+                                ? "L'accès à la localisation est bloqué. Veuillez l'activer dans les réglages."
+                                : "Strive a besoin de votre position pour enregistrer vos parcours GPS."}
+                        </Text>
+                    </View>
+                    <TouchableOpacity
+                        style={[styles.permissionButton, permissionStatus === 'denied' && { backgroundColor: Colors.error }]}
+                        onPress={permissionStatus === 'denied' ? Linking.openSettings : requestPermissions}
+                    >
+                        <Text style={styles.permissionButtonText}>
+                            {permissionStatus === 'denied' ? "Réglages" : "Autoriser"}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
             {/* Global Stats */}
             {globalStats && globalStats.totalActivities > 0 && (
@@ -298,5 +355,46 @@ const styles = StyleSheet.create({
         marginTop: 8,
         textAlign: 'center',
         paddingHorizontal: 40,
+    },
+    permissionBanner: {
+        marginHorizontal: 20,
+        marginBottom: 20,
+        backgroundColor: 'rgba(253, 149, 0, 0.1)',
+        borderWidth: 1,
+        borderColor: 'rgba(253, 149, 0, 0.3)',
+        borderRadius: 16,
+        padding: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    permissionBannerError: {
+        backgroundColor: 'rgba(244, 67, 54, 0.1)',
+        borderColor: 'rgba(244, 67, 54, 0.3)',
+    },
+
+    permissionTextContainer: {
+        flex: 1,
+    },
+    permissionTitle: {
+        color: '#FD9500',
+        fontWeight: 'bold',
+        fontSize: 14,
+        marginBottom: 2,
+    },
+    permissionText: {
+        color: Colors.textSecondary,
+        fontSize: 12,
+    },
+    permissionButton: {
+        backgroundColor: '#FD9500',
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderRadius: 20,
+    },
+    permissionButtonText: {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: 12,
     }
 });

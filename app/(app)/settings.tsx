@@ -1,16 +1,28 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity, Alert, Image, Modal, TextInput, Linking } from 'react-native';
 import { Stack } from 'expo-router';
 import { Colors } from '../../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { useSettings } from '../../context/SettingsContext';
+import { useState } from 'react';
+
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../../context/AuthContext';
 import * as ImagePicker from 'expo-image-picker';
 
 export default function SettingsScreen() {
-    const { notifications, toggleNotifications, darkMode, toggleDarkMode } = useSettings();
-    const { user, updateProfilePhoto } = useAuth();
+
+    const { user, updateProfilePhoto, updateProfile } = useAuth();
+    const [modalVisible, setModalVisible] = useState(false);
+    const [newName, setNewName] = useState(user?.name || '');
+
+    const handleSaveName = async () => {
+        if (newName.trim().length === 0) {
+            Alert.alert("Erreur", "Le nom ne peut pas être vide");
+            return;
+        }
+        await updateProfile(newName);
+        setModalVisible(false);
+    };
 
     const handleChangePhoto = async () => {
         const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -63,39 +75,29 @@ export default function SettingsScreen() {
                             <Ionicons name="pencil" size={16} color="#fff" />
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.userName}>{user?.name || 'Utilisateur'}</Text>
+
+                    <TouchableOpacity onPress={() => {
+                        setNewName(user?.name || '');
+                        setModalVisible(true);
+                    }} style={styles.nameContainer}>
+                        <Text style={styles.userName}>{user?.name || 'Utilisateur'}</Text>
+                        <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
+                    </TouchableOpacity>
                     <Text style={styles.userEmail}>{user?.email || 'email@exemple.com'}</Text>
                 </View>
 
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Préférences</Text>
-
-                    <View style={styles.row}>
+                    <Text style={styles.sectionTitle}>Système</Text>
+                    <TouchableOpacity style={styles.row} onPress={() => Linking.openSettings()}>
                         <View style={styles.rowLeft}>
-                            <Ionicons name="notifications-outline" size={24} color={Colors.text} />
-                            <Text style={styles.rowText}>Notifications</Text>
+                            <Ionicons name="settings-outline" size={24} color={Colors.text} />
+                            <Text style={styles.rowText}>Gérer les permissions</Text>
                         </View>
-                        <Switch
-                            value={notifications}
-                            onValueChange={toggleNotifications}
-                            trackColor={{ false: '#3e3e3e', true: Colors.primary }}
-                            thumbColor={'#fff'}
-                        />
-                    </View>
-
-                    <View style={styles.row}>
-                        <View style={styles.rowLeft}>
-                            <Ionicons name="moon-outline" size={24} color={Colors.text} />
-                            <Text style={styles.rowText}>Mode Sombre</Text>
-                        </View>
-                        <Switch
-                            value={darkMode}
-                            onValueChange={toggleDarkMode}
-                            trackColor={{ false: '#3e3e3e', true: Colors.primary }}
-                            thumbColor={'#fff'}
-                        />
-                    </View>
+                        <Ionicons name="chevron-forward" size={20} color={Colors.textSecondary} />
+                    </TouchableOpacity>
                 </View>
+
+
 
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>À propos</Text>
@@ -106,6 +108,43 @@ export default function SettingsScreen() {
                 </View>
 
             </ScrollView>
+
+            <Modal
+                visible={modalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContent}>
+                        <Text style={styles.modalTitle}>Modifier le profil</Text>
+
+                        <Text style={styles.label}>Nom complet</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={newName}
+                            onChangeText={setNewName}
+                            placeholder="Votre nom"
+                            placeholderTextColor={Colors.textSecondary}
+                        />
+
+                        <View style={styles.modalButtons}>
+                            <TouchableOpacity
+                                style={[styles.button, styles.cancelButton]}
+                                onPress={() => setModalVisible(false)}
+                            >
+                                <Text style={styles.buttonText}>Annuler</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.button, styles.saveButton]}
+                                onPress={handleSaveName}
+                            >
+                                <Text style={[styles.buttonText, { color: '#fff' }]}>Enregistrer</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -211,5 +250,70 @@ const styles = StyleSheet.create({
     valueText: {
         color: Colors.textSecondary,
         fontSize: 16,
+    },
+    nameContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        padding: 24,
+    },
+    modalContent: {
+        backgroundColor: Colors.surface,
+        borderRadius: 20,
+        padding: 24,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 10,
+    },
+    modalTitle: {
+        fontSize: 20,
+        fontWeight: 'bold',
+        color: Colors.text,
+        marginBottom: 24,
+        textAlign: 'center',
+    },
+    label: {
+        color: Colors.textSecondary,
+        fontSize: 14,
+        marginBottom: 8,
+    },
+    input: {
+        backgroundColor: Colors.background,
+        borderRadius: 12,
+        padding: 16,
+        color: Colors.text,
+        fontSize: 16,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: Colors.border || '#333',
+    },
+    modalButtons: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    button: {
+        flex: 1,
+        padding: 16,
+        borderRadius: 12,
+        alignItems: 'center',
+    },
+    cancelButton: {
+        backgroundColor: Colors.background,
+    },
+    saveButton: {
+        backgroundColor: Colors.primary,
+    },
+    buttonText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: Colors.text,
     },
 });

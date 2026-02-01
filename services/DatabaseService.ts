@@ -21,7 +21,10 @@ export const initDatabase = async () => {
       end_time INTEGER,
       duration INTEGER DEFAULT 0,
       distance REAL DEFAULT 0,
+      duration INTEGER DEFAULT 0,
+      distance REAL DEFAULT 0,
       avg_speed REAL DEFAULT 0,
+      type TEXT DEFAULT 'run',
       polyline_json TEXT
     );
     CREATE TABLE IF NOT EXISTS location_points (
@@ -31,27 +34,52 @@ export const initDatabase = async () => {
       longitude REAL NOT NULL,
       timestamp INTEGER NOT NULL,
       speed REAL,
+      accuracy REAL,
       FOREIGN KEY (activity_id) REFERENCES activities (id)
     );
   `);
     console.log('Database initialized');
+
+    // Safe migration: check if column exists
+    const tableInfo = await database.getAllAsync('PRAGMA table_info(location_points)') as any[];
+    const hasAccuracy = tableInfo.some(col => col.name === 'accuracy');
+
+    if (!hasAccuracy) {
+        try {
+            await database.execAsync('ALTER TABLE location_points ADD COLUMN accuracy REAL');
+        } catch (e) {
+            console.log('Migration error (ignored if benign):', e);
+        }
+    }
+
+    // Migration for 'type' in activities
+    const activityTableInfo = await database.getAllAsync('PRAGMA table_info(activities)') as any[];
+    const hasType = activityTableInfo.some(col => col.name === 'type');
+
+    if (!hasType) {
+        try {
+            await database.execAsync("ALTER TABLE activities ADD COLUMN type TEXT DEFAULT 'run'");
+        } catch (e) {
+            console.log('Migration error (type):', e);
+        }
+    }
 };
 
-export const createActivity = async () => {
+export const createActivity = async (type: string = 'run') => {
     const database = await getDb();
     const startTime = Date.now();
     const result = await database.runAsync(
-        'INSERT INTO activities (start_time) VALUES (?)',
-        startTime
+        'INSERT INTO activities (start_time, type) VALUES (?, ?)',
+        startTime, type
     );
     return result.lastInsertRowId; // Return activity ID
 };
 
-export const addLocationPoint = async (activityId: number, lat: number, lon: number, speed: number | null) => {
+export const addLocationPoint = async (activityId: number, lat: number, lon: number, speed: number | null, accuracy: number | null) => {
     const database = await getDb();
     await database.runAsync(
-        'INSERT INTO location_points (activity_id, latitude, longitude, timestamp, speed) VALUES (?, ?, ?, ?, ?)',
-        activityId, lat, lon, Date.now(), speed || 0
+        'INSERT INTO location_points (activity_id, latitude, longitude, timestamp, speed, accuracy) VALUES (?, ?, ?, ?, ?, ?)',
+        activityId, lat, lon, Date.now(), speed || 0, accuracy || 0
     );
 };
 

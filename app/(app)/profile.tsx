@@ -4,10 +4,27 @@ import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../constants/Colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Link } from 'expo-router';
+import { Link, useFocusEffect } from 'expo-router';
+import { getGlobalStats } from '../../services/DatabaseService';
+import { useCallback, useState } from 'react';
 
 export default function ProfileScreen() {
     const { user, signOut } = useAuth();
+    const [stats, setStats] = useState({ totalActivities: 0, totalDistance: 0 });
+
+    useFocusEffect(
+        useCallback(() => {
+            loadStats();
+        }, [])
+    );
+
+    const loadStats = async () => {
+        const data = await getGlobalStats();
+        setStats({
+            totalActivities: data.totalActivities,
+            totalDistance: data.totalDistance
+        });
+    };
 
     return (
         <View style={styles.container}>
@@ -36,12 +53,12 @@ export default function ProfileScreen() {
 
                     <View style={styles.statsRow}>
                         <View style={styles.stat}>
-                            <Text style={styles.statVal}>0</Text>
+                            <Text style={styles.statVal}>{stats.totalActivities}</Text>
                             <Text style={styles.statLabel}>Activités</Text>
                         </View>
                         <View style={styles.divider} />
                         <View style={styles.stat}>
-                            <Text style={styles.statVal}>0</Text>
+                            <Text style={styles.statVal}>{stats.totalDistance.toFixed(1)}</Text>
                             <Text style={styles.statLabel}>km</Text>
                         </View>
                     </View>
@@ -80,8 +97,6 @@ export default function ProfileScreen() {
                         <Ionicons name="log-out-outline" size={24} color={Colors.error} />
                         <Text style={[styles.menuText, { color: Colors.error }]}>Se déconnecter</Text>
                     </TouchableOpacity>
-
-                    <Text style={styles.version}>Version 1.1.0 Premium</Text>
                 </View>
             </ScrollView>
         </View>
