@@ -6,6 +6,8 @@ import { deleteActivity, getActivityById } from '../../../services/DatabaseServi
 import MapView, { Polyline, PROVIDER_DEFAULT, Marker } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Platform } from 'react-native';
+import LeafletMap from '../../../components/LeafletMap';
 
 export default function ActivityDetailScreen() {
     const { id } = useLocalSearchParams();
@@ -130,46 +132,58 @@ export default function ActivityDetailScreen() {
                 headerShown: false
             }} />
 
-            <MapView
-                style={StyleSheet.absoluteFill}
-                provider={PROVIDER_DEFAULT}
-                initialRegion={region}
-                pitchEnabled={true}
-                rotateEnabled={true}
-                scrollEnabled={true}
-                zoomEnabled={true}
-                showsUserLocation={false}
-                userInterfaceStyle="dark"
-                ref={mapRef}
-                onMapReady={() => {
-                    if (polyline.length > 0) {
-                        mapRef.current?.fitToCoordinates(polyline, {
-                            edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
-                            animated: true,
-                        });
-                    }
-                }}
-            >
-                <Polyline
-                    coordinates={polyline}
-                    strokeColor={Colors.primary}
-                    strokeWidth={4}
+            {Platform.OS === 'android' ? (
+                <LeafletMap
+                    ref={mapRef as any}
+                    routeCoordinates={polyline}
+                    markers={[
+                        ...(polyline.length > 0 ? [{ latitude: polyline[0].latitude, longitude: polyline[0].longitude, color: 'green' }] : []),
+                        ...(polyline.length > 0 ? [{ latitude: polyline[polyline.length - 1].latitude, longitude: polyline[polyline.length - 1].longitude, color: 'red' }] : [])
+                    ]}
+                    interactive={true}
                 />
-                {polyline.length > 0 && (
-                    <>
-                        <Marker
-                            coordinate={polyline[0]}
-                            title="Départ"
-                            pinColor="green"
-                        />
-                        <Marker
-                            coordinate={polyline[polyline.length - 1]}
-                            title="Arrivée"
-                            pinColor="red"
-                        />
-                    </>
-                )}
-            </MapView>
+            ) : (
+                <MapView
+                    style={StyleSheet.absoluteFill}
+                    provider={PROVIDER_DEFAULT}
+                    initialRegion={region}
+                    pitchEnabled={true}
+                    rotateEnabled={true}
+                    scrollEnabled={true}
+                    zoomEnabled={true}
+                    showsUserLocation={false}
+                    userInterfaceStyle="dark"
+                    ref={mapRef}
+                    onMapReady={() => {
+                        if (polyline.length > 0) {
+                            mapRef.current?.fitToCoordinates(polyline, {
+                                edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
+                                animated: true,
+                            });
+                        }
+                    }}
+                >
+                    <Polyline
+                        coordinates={polyline}
+                        strokeColor={Colors.primary}
+                        strokeWidth={4}
+                    />
+                    {polyline.length > 0 && (
+                        <>
+                            <Marker
+                                coordinate={polyline[0]}
+                                title="Départ"
+                                pinColor="green"
+                            />
+                            <Marker
+                                coordinate={polyline[polyline.length - 1]}
+                                title="Arrivée"
+                                pinColor="red"
+                            />
+                        </>
+                    )}
+                </MapView>
+            )}
 
             <TouchableOpacity
                 style={[styles.backButton, { top: insets.top + 10 }]}

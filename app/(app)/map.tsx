@@ -6,6 +6,8 @@ import { Colors } from '../../constants/Colors';
 import { LocationService, locationEvents } from '../../services/LocationService';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Platform } from 'react-native';
+import LeafletMap from '../../components/LeafletMap';
 
 export default function MapScreen() {
     const [currentLocation, setCurrentLocation] = useState<Location.LocationObject | null>(null);
@@ -27,14 +29,21 @@ export default function MapScreen() {
     useEffect(() => {
         // Initial current location & auto-center
         (async () => {
+            console.log('[MapScreen] Requesting location permission...');
             let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status !== 'granted') return;
+            if (status !== 'granted') {
+                console.log('[MapScreen] Location permission denied');
+                return;
+            }
 
+            console.log('[MapScreen] Getting current position...');
             let location = await Location.getCurrentPositionAsync({});
+            console.log('[MapScreen] Got location:', location.coords.latitude, location.coords.longitude);
             setCurrentLocation(location);
 
             // Auto-center immediately
             if (mapRef.current && location) {
+                console.log('[MapScreen] Centering map on location');
                 mapRef.current.animateCamera({
                     center: {
                         latitude: location.coords.latitude,
@@ -110,6 +119,7 @@ export default function MapScreen() {
                 setIsTracking(false);
                 setIsPaused(false);
                 setElapsedTime(0);
+                setRouteCoordinates([]); // Clear the route when stopping
             } catch (e) {
                 console.error(e);
             }
@@ -151,27 +161,36 @@ export default function MapScreen() {
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
-            <MapView
-                ref={mapRef}
-                style={styles.map}
-                provider={PROVIDER_DEFAULT}
-                showsUserLocation={true}
-                followsUserLocation={isTracking} // Only follow strictly when tracking to avoid annoyance when browsing map
-                initialRegion={{
-                    latitude: 48.8566,
-                    longitude: 2.3522,
-                    latitudeDelta: 0.0922,
-                    longitudeDelta: 0.0421,
-                }}
-                userInterfaceStyle="dark"
-            >
-                <Polyline
-                    coordinates={routeCoordinates}
-                    strokeColor={Colors.primary}
-                    strokeWidth={6}
-                    lineDashPattern={[0]}
+            {Platform.OS === 'android' ? (
+                <LeafletMap
+                    ref={mapRef as any}
+                    routeCoordinates={routeCoordinates}
+                    isTracking={isTracking}
+                    location={currentLocation?.coords}
                 />
-            </MapView>
+            ) : (
+                <MapView
+                    ref={mapRef}
+                    style={styles.map}
+                    provider={PROVIDER_DEFAULT}
+                    showsUserLocation={true}
+                    followsUserLocation={isTracking} // Only follow strictly when tracking to avoid annoyance when browsing map
+                    initialRegion={{
+                        latitude: 48.8566,
+                        longitude: 2.3522,
+                        latitudeDelta: 0.0922,
+                        longitudeDelta: 0.0421,
+                    }}
+                    userInterfaceStyle="dark"
+                >
+                    <Polyline
+                        coordinates={routeCoordinates}
+                        strokeColor={Colors.primary}
+                        strokeWidth={6}
+                        lineDashPattern={[0]}
+                    />
+                </MapView>
+            )}
 
             {/* Floating Controls */}
             <View style={styles.controlsContainer}>
