@@ -130,8 +130,9 @@ export default function MapScreen() {
                 setIsTracking(true);
                 setDistance(0);
                 setElapsedTime(0);
-            } catch (e) {
-                alert('Permission requise ou erreur de démarrage');
+            } catch (e: any) {
+                console.error('[MapScreen] Start tracking error:', e);
+                alert(e.message || 'Erreur lors du démarrage du suivi');
             }
         }
     };

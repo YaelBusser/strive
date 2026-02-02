@@ -1,6 +1,8 @@
 import * as SQLite from 'expo-sqlite';
 
 let db: SQLite.SQLiteDatabase;
+let isInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 // Open the database securely
 export const getDb = async () => {
@@ -11,16 +13,19 @@ export const getDb = async () => {
 };
 
 export const initDatabase = async () => {
-    const database = await getDb();
+    // Prevent multiple simultaneous initializations
+    if (isInitialized) return;
+    if (initPromise) return initPromise;
 
-    await database.execAsync(`
+    initPromise = (async () => {
+        const database = await getDb();
+
+        await database.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS activities (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       start_time INTEGER NOT NULL,
       end_time INTEGER,
-      duration INTEGER DEFAULT 0,
-      distance REAL DEFAULT 0,
       duration INTEGER DEFAULT 0,
       distance REAL DEFAULT 0,
       avg_speed REAL DEFAULT 0,
@@ -38,31 +43,36 @@ export const initDatabase = async () => {
       FOREIGN KEY (activity_id) REFERENCES activities (id)
     );
   `);
-    console.log('Database initialized');
+        console.log('Database initialized');
+        isInitialized = true;
 
-    // Safe migration: check if column exists
-    const tableInfo = await database.getAllAsync('PRAGMA table_info(location_points)') as any[];
-    const hasAccuracy = tableInfo.some(col => col.name === 'accuracy');
+        // Safe migration: check if column exists
+        const tableInfo = await database.getAllAsync('PRAGMA table_info(location_points)') as any[];
+        const hasAccuracy = tableInfo.some(col => col.name === 'accuracy');
 
-    if (!hasAccuracy) {
-        try {
-            await database.execAsync('ALTER TABLE location_points ADD COLUMN accuracy REAL');
-        } catch (e) {
-            console.log('Migration error (ignored if benign):', e);
+        if (!hasAccuracy) {
+            try {
+                await database.execAsync('ALTER TABLE location_points ADD COLUMN accuracy REAL');
+            } catch (e) {
+                console.log('Migration error (ignored if benign):', e);
+            }
         }
-    }
 
-    // Migration for 'type' in activities
-    const activityTableInfo = await database.getAllAsync('PRAGMA table_info(activities)') as any[];
-    const hasType = activityTableInfo.some(col => col.name === 'type');
+        // Migration for 'type' in activities
+        const activityTableInfo = await database.getAllAsync('PRAGMA table_info(activities)') as any[];
+        const hasType = activityTableInfo.some(col => col.name === 'type');
 
-    if (!hasType) {
-        try {
-            await database.execAsync("ALTER TABLE activities ADD COLUMN type TEXT DEFAULT 'run'");
-        } catch (e) {
-            console.log('Migration error (type):', e);
+        if (!hasType) {
+            try {
+                await database.execAsync("ALTER TABLE activities ADD COLUMN type TEXT DEFAULT 'run'");
+            } catch (e) {
+                console.log('Migration error (type):', e);
+            }
         }
-    }
+    })();
+
+    await initPromise;
+    initPromise = null;
 };
 
 export const createActivity = async (type: string = 'run') => {

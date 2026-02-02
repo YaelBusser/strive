@@ -122,18 +122,30 @@ export const LocationService = {
     requestPermissions: async () => {
         const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
         if (foregroundStatus !== 'granted') {
-            return false;
+            throw new Error('FOREGROUND_PERMISSION_DENIED');
         }
         const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
-        return backgroundStatus === 'granted';
+        if (backgroundStatus !== 'granted') {
+            throw new Error('BACKGROUND_PERMISSION_DENIED');
+        }
+        return true;
     },
 
     startTracking: async (activityType: string = 'run') => {
         if (isTracking) return;
 
-        const hasPermissions = await LocationService.requestPermissions();
-        if (!hasPermissions) {
-            throw new Error('Permissions not granted');
+        try {
+            const hasPermissions = await LocationService.requestPermissions();
+            if (!hasPermissions) {
+                throw new Error('PERMISSIONS_NOT_GRANTED');
+            }
+        } catch (permError: any) {
+            if (permError.message === 'FOREGROUND_PERMISSION_DENIED') {
+                throw new Error('Permission de localisation refusée. Veuillez autoriser l\'accès à votre position.');
+            } else if (permError.message === 'BACKGROUND_PERMISSION_DENIED') {
+                throw new Error('Permission de localisation en arrière-plan refusée. Pour suivre vos activités, autorisez "Toujours" dans les paramètres de localisation.');
+            }
+            throw permError;
         }
 
         try {
