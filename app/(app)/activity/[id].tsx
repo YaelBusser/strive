@@ -25,10 +25,13 @@ export default function ActivityDetailScreen() {
 
     useEffect(() => {
         if (polyline.length > 0 && mapRef.current) {
-            mapRef.current.fitToCoordinates(polyline, {
-                edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
-                animated: true,
-            });
+            // Delay to ensure LeafletMap WebView is ready
+            setTimeout(() => {
+                mapRef.current?.fitToCoordinates(polyline, {
+                    edgePadding: { top: 100, right: 50, bottom: 50, left: 50 },
+                    animated: true,
+                });
+            }, 500);
         }
     }, [polyline]);
 
@@ -69,7 +72,7 @@ export default function ActivityDetailScreen() {
     const formatDuration = (seconds: number) => {
         const h = Math.floor(seconds / 3600);
         const m = Math.floor((seconds % 3600) / 60);
-        const s = seconds % 60;
+        const s = (seconds % 60).toFixed(2);
         return `${h > 0 ? h + 'h ' : ''}${m}m ${s}s`;
     };
 
